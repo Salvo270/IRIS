@@ -1,5 +1,5 @@
 # Modifiche apportate: 
-# - sostituzione del metodo "timesleep" con "putCompliting"
+# - sostituzione del metodo "timesleep" con "putCompliting" (Completato)
 # - nuovo stato iniziale per il settaggio dei motori e il controllo delle connessioni del PV
 # - il metodo per l'homing viene eseguito solo se necessario tutte le altre movimentazioni vengono esguite con .relative (anche per giri completi)
 

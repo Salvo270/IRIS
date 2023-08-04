@@ -1,5 +1,5 @@
 # Modifiche apportate: 
-# - sostituzione del metodo "timesleep" con "putCompliting" (Completato)
+# - sostituzione del metodo "timesleep" con "putCompliting"
 # - nuovo stato iniziale per il settaggio dei motori e il controllo delle connessioni del PV
 # - il metodo per l'homing viene eseguito solo se necessario tutte le altre movimentazioni vengono esguite con .relative (anche per giri completi)
 
@@ -12,17 +12,22 @@ class IRIS_FSM(fsmBase):
         super(IRIS_FSM, self).__init__(name, **kwargs)
 
         
-        # ALIGNMENT " Charge_Central_Movement" - - - -
-        self.i1 = 64              
+        # ALIGNMENT - - - - - - - - - - - - - - - - - - - - - - - -
 
-        self.charge_d1 = 130     # previous value:  495  x 8
-        self.charge_d2 = 150     # previous value:  1095 x 8                                # VALORI DA VERIFICARE !!
-        self.charge_d3 = 155     # previous value:  265  x 32
+        # Charge_Central_Movement position
+        self.exact_1_charge_central_steps = 7872
+        self.exact_2_charge_central_steps = 16320
+        self.exact_3_charge_central_steps = 24768
 
-        #Correction
-        self.corr_i1 = -128
-        self.corr = 5            # Charge Correction
-        # - - - - - - - - - - - - - - - - - - - - - - - -
+        # Discharge Central Movement position
+        self.exact_1_discharge_central_steps = 4096
+        self.exact_2_discharge_central_steps = 13248
+        self.exact_3_discharge_central_steps = 21952
+
+        # Charge Central Movement Correction
+        self.relative_correction = 64  # correzione di uno step
+
+        # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
 
         # ALIGNMENT " Discharge_Central_Movement" - - - -
         self.i2 = 64        
@@ -104,7 +109,7 @@ class IRIS_FSM(fsmBase):
 
         # Ch4 - Discharge buffer motor
         self.m4_relative = self.connect("WhHrdwMtbx54A_Chan04:Motr.RLV")
-	#self.m4_record_position = self.connect("WhHrdwMtbx54A_Chan04:Motr")
+	    #self.m4_record_position = self.connect("WhHrdwMtbx54A_Chan04:Motr")
         self.m4_home = self.connect("WhHrdwMtbx54A_Chan04:Homf.PROC")
         self.m4_reverse = self.connect("WhHrdwMtbx54A_Chan04:Homr.PROC")
         self.m4_stop = self.connect("WhHrdwMtbx54A_Chan04:Motr.STOP")
@@ -114,7 +119,8 @@ class IRIS_FSM(fsmBase):
 
         # Ch5 - Central Movement
         self.m5_relative = self.connect("WhHrdwMtbx54A_Chan05:Motr.RLV")
-        self.m5_home= self.connect("WhHrdwMtbx54A_Chan05:Homr.PROC")                 # Per Homing
+        self.m5_absolute = self.connect("WhHrdwMtbx54A_Chan05:Motr")
+        self.m5_home= self.connect("WhHrdwMtbx54A_Chan05:Homr.PROC")                  # Per Homing
         self.m5_forward = self.connect("WhHrdwMtbx54A_Chan05:Homf.PROC")
         self.m5_stop = self.connect("WhHrdwMtbx54A_Chan05:Motr.STOP")
         self.m5_done_moving = self.connect("WhHrdwMtbx54A_Chan05:Motr.DMOV")
@@ -665,14 +671,14 @@ class IRIS_FSM(fsmBase):
     
 # Estrazione attuatore
     def Charge_Central1_state_entry(self):  
-        self.lock2_extract.put(1)                                                      # Estrae Solenoid_Top (1)
-        self.tmrSet('moveTimeout8_1', 10)                                              # Set a timer of 30s
+        self.lock2_extract.put(1)                                                                                          # Estrae Solenoid_Top (1)
+        self.tmrSet('moveTimeout8_1', 10)                                              
 
     def Charge_Central1_state_eval(self):
         if self.lock2_extract.putCompleting():
             self.gotoState("Charge_Central_state2")   
 
-        elif self.tmrExpiring('moveTimeout8_1'):                                       # Timer expired event
+        elif self.tmrExpiring('moveTimeout8_1'):                                                                       
             self.state_2.put(4)
             self.gotoState("idle_error")  
 
@@ -681,15 +687,15 @@ class IRIS_FSM(fsmBase):
 
 # Movimentazione motore
     def Charge_Central_state2_entry(self):  
-        self.m5_relative.put(self.i1*self.charge_d1)                                   # 1^ Movimentazione: Carica primo e secondo Target
-        self.tmrSet('moveTimeout8', 30)                                                # Set a timer of 30s
+        self.m5_absolute.put(self.exact_1_charge_central_steps + self.relative_correction)                                 # 1^ Movimentazione: Carica primo e secondo Target
+        self.tmrSet('moveTimeout8', 30)                                               
         self.logI("\tStarting Central movement\t")     
 
     def Charge_Central_state2_eval(self):
         if self.m5_done_moving.rising():          
             self.gotoState("Charge_state")   
 
-        elif self.tmrExpiring('moveTimeout8'):                                         # Timer expired event
+        elif self.tmrExpiring('moveTimeout8'):                                        
             self.state_2.put(4)
             self.logI("\t<  - - - !! ERROR: Central movement : during 1^ movement - - -  >\n")
             self.gotoState("idle_error")  
@@ -700,11 +706,11 @@ class IRIS_FSM(fsmBase):
 # Carica 1^, 2^ Target e Scarica 1^ Target: Charge Buffer, m2 - - - - - - - - - - - - - - - - - - - - -
     def Charge_state_entry(self): 
         if self.n_restart%2 == 0:  # se pari
-            self.m2_reverse.put(1)                                                    # Per la carica di 1 compressa
+            self.m2_reverse.put(1)                                                                                           # Per la carica di 1 compressa
         else:                      # se dispari
             self.m2_home.put(1)
 
-        self.tmrSet('moveTimeout10', 30)                                              # Set a timer of 30s
+        self.tmrSet('moveTimeout10', 30)                                             
         self.logI("\tStarting Charge Buffer movement\t")
 
     def Charge_state_eval(self):
@@ -712,7 +718,7 @@ class IRIS_FSM(fsmBase):
             self.logI("\t1^ Target in \t")
             self.gotoState("Correction_CM")
 
-        elif self.tmrExpiring("moveTimeout10"):                                       # Timer expired event
+        elif self.tmrExpiring("moveTimeout10"):                                       
             self.state_2.put(4) 
             self.logI("\t<  - - - !! ERROR: Charge Buffer movement - - -  >\t")
             self.gotoState("idle_error")  
@@ -722,8 +728,8 @@ class IRIS_FSM(fsmBase):
 
 # Correzione Central Movement
     def Correction_CM_entry(self):     
-        self.m5_relative.put(self.corr_i1 *self.corr)                                  # 1^ Movimentazione: Carica primo e secondo Target
-        self.tmrSet('moveTimeout9_1', 30)                                              # Set a timer of 30s
+        self.m5_absolute.put(self.exact_1_charge_central_steps - self.relative_correction)                                  # 1^ Correzione posizione central
+        self.tmrSet('moveTimeout9_1', 30)                                              
         self.logI("\tStarting Central movement\t")     
 
     def Correction_CM_eval(self):
@@ -760,14 +766,14 @@ class IRIS_FSM(fsmBase):
 
 # Estrazione attuatore
     def Extract_lock_state2_entry(self):  
-        self.lock2_extract.put(1)                                                       # Estrae Solenoid_Top (2)
+        self.lock2_extract.put(1)                                                                                        # Estrae Solenoid_Top (2)
         self.tmrSet('moveTimeout11_1', 10)                                             
 
     def Extract_lock_state2_eval(self):
         if self.lock2_extract.putCompleting():
             self.gotoState("Charge_Central_state2")   
 
-        elif self.tmrExpiring('moveTimeout11_1'):                                       # Timer expired event
+        elif self.tmrExpiring('moveTimeout11_1'):                                       
             self.state_2.put(4)
             self.gotoState("idle_error")  
 
@@ -776,15 +782,15 @@ class IRIS_FSM(fsmBase):
     
 # Movimentazione motore Central Movement
     def Charge_Central_state2_entry(self):
-        self.m5_relative.put(self.i1*self.charge_d2)                                    # 2^ Movimentazione: Carica secondo Target
-        self.tmrSet('moveTimeout11', 30)                                                # Set a timer of 30s
+        self.m5_absolute.put(self.exact_2_charge_central_steps + self.relative_correction)                                # 2^ Movimentazione: Carica secondo Target
+        self.tmrSet('moveTimeout11', 30)                                                
         self.logI("\tStarting Central movement\t")     
 
     def Charge_Central_state2_eval(self):
         if self.m5_done_moving.rising():    
             self.gotoState("Charge_Buffer2_state")   
 
-        elif self.tmrExpiring("moveTimeout11"):                                          # Timer expired event
+        elif self.tmrExpiring("moveTimeout11"):                                         
             self.state_2.put(4)
             self.logI("\t<  - - - !! ERROR: Central movement : during 2^ movement - - -  >\t")
             self.gotoState("idle_error")  
@@ -798,9 +804,9 @@ class IRIS_FSM(fsmBase):
         if self.n_restart%2 == 0: # se pari
             self.m2_home.put(1)                                                    
         else:                      # se dispari
-            self.m2_reverse.put(1)                                                    # Per la carica della 2^ compressa e scarica del 1^
+            self.m2_reverse.put(1)                                                                                        # Per la carica della 2^ compressa e scarica del 1^
 
-        self.tmrSet('moveTimeout13', 30)                                              # Set a timer of 50s
+        self.tmrSet('moveTimeout13', 30)                                              
         self.logI("\tStarting Charge Buffer movement\t")
 
     def Charge_Buffer2_state_eval(self):
@@ -808,7 +814,7 @@ class IRIS_FSM(fsmBase):
             self.logI("\t2^ - Target in")
             self.gotoState("Correction_CM2") 
 
-        elif self.tmrExpiring("moveTimeout13"):                                       # Timer expired event
+        elif self.tmrExpiring("moveTimeout13"):                                       
             self.state_2.put(4) 
             self.logI("\t<  - - - !! ERROR: Charge Buffer movement - - -  >\t")
             self.gotoState("idle_error") 
@@ -818,15 +824,15 @@ class IRIS_FSM(fsmBase):
 
 # Correzione Central Movement
     def Correction_CM2_entry(self):     
-        self.m5_relative.put(self.corr_i1 *self.corr)                                  # 2^ Correzione
-        self.tmrSet('moveTimeout13', 30)                                               # Set a timer of 30s
+        self.m5_absolute.put(self.exact_2_charge_central_steps - self.relative_correction)                                 # 2^ Correzione
+        self.tmrSet('moveTimeout13', 30)                                               
         self.logI("\tStarting Central movement\t")     
 
     def Correction_CM2_eval(self):
         if self.m5_done_moving.rising():          
             self.gotoState("Insert_Top1_2")   
 
-        elif self.tmrExpiring('moveTimeout13'):                                        # Timer expired event
+        elif self.tmrExpiring('moveTimeout13'):                                        
             self.state_2.put(4)
             self.logI("\t<  - - - !! ERROR: Central movement : during 2^ correction movement - - -  >\t")
             self.gotoState("idle_error")  
@@ -836,14 +842,14 @@ class IRIS_FSM(fsmBase):
     
 # Insert solenoid top1 - 2
     def Insert_Top1_2_entry(self):  
-        self.lock2_insert.put(1)                                                        # "Disinserisce" Solenoid_Top (2)  
+        self.lock2_insert.put(1)                                                                                           # "Disinserisce" Solenoid_Top (2)  
         self.tmrSet('moveTimeout13_1', 10)                                                
 
     def Insert_Top1_2_eval(self):
         if self.lock2_insert.putCompleting():                                                         
             self.gotoState("Extract_lock_state3")   
 
-        elif self.tmrExpiring('moveTimeout13_1'):                                       # Timer expired event
+        elif self.tmrExpiring('moveTimeout13_1'):                                     
             self.state_2.put(4)
             self.logI("\t<  - - - !! ERROR: Central movement : during 1^ movement - - -  >\t")
             self.gotoState("idle_error")  
@@ -855,14 +861,14 @@ class IRIS_FSM(fsmBase):
 
 # Estrazione attuatore
     def Extract_lock_state3_entry(self):  
-        self.lock2_extract.put(1)                                                       # Estrae Solenoid_Top (2)
-        self.tmrSet('moveTimeout13_2', 10)                                              # Set a timer of 10s
+        self.lock2_extract.put(1)                                                                                          # Estrae Solenoid_Top (2)
+        self.tmrSet('moveTimeout13_2', 10)                                              
 
     def Extract_lock_state3_eval(self):
         if self.lock2_extract.putCompleting():
             self.gotoState("Charge_Central_state3")   
 
-        elif self.tmrExpiring('moveTimeout13_2'):                                       # Timer expired event
+        elif self.tmrExpiring('moveTimeout13_2'):                                      
             self.state_2.put(4)
             self.gotoState("idle_error")  
 
@@ -871,8 +877,8 @@ class IRIS_FSM(fsmBase):
     
 # Movimentazione Central Movement  
     def Charge_Central_state3_entry(self):
-        self.m5_relative.put(self.i1*self.charge_d3)                                  # 3^ Movimentazione: Carica terzo Target
-        self.tmrSet('moveTimeout14', 30)                                              # Set a timer of 30s
+        self.m5_absolute.put(self.exact_3_charge_central_steps + self.relative_correction)                                # 3^ Movimentazione: Carica terzo Target
+        self.tmrSet('moveTimeout14', 30)                                              
         self.logI("\tStarting Central movement\t")     
 
     def Charge_Central_state3_eval(self):
@@ -880,7 +886,7 @@ class IRIS_FSM(fsmBase):
             self.logI("\t3^ - Target in\t")
             self.gotoState("Charge_Buffer3_state")                                  
 
-        elif self.tmrExpiring("moveTimeout14"):                                       # Timer expired event
+        elif self.tmrExpiring("moveTimeout14"):                                      
             self.state_2.put(4)
             self.logI("\t<  - - - !! ERROR: Central movement : during 3^ movement - - -  >\n")
             self.gotoState("idle_error")  
@@ -913,7 +919,7 @@ class IRIS_FSM(fsmBase):
 
 # Correzione Central Movement
     def Correction_CM3_entry(self):     
-        self.m5_relative.put(self.corr_i1 *self.corr)                                  
+        self.m5_absolute.put(self.exact_3_charge_central_steps - self.relative_correction)                                 # 3^ Correzione                     
         self.tmrSet('moveTimeout15_1', 30)                                       
         self.logI("\tStarting Central movement\t")     
 
@@ -931,14 +937,14 @@ class IRIS_FSM(fsmBase):
     
 # Insert solenoid top1 - 3 
     def Insert_Top1_3_entry(self):  
-        self.lock2_insert.put(1)                                                       # "Disinserisce" Solenoid_Top (1)  
+        self.lock2_insert.put(1)                                                                                            # "Disinserisce" Solenoid_Top (1)  
         self.tmrSet('moveTimeout15', 10)                                               
 
     def Insert_Top1_3_eval(self):
         if self.lock2_insert.putCompleting():                                                         
             self.gotoState("Charge_Central_state4")   
 
-        elif self.tmrExpiring('moveTimeout15'):                                          # Timer expired event
+        elif self.tmrExpiring('moveTimeout15'):                                          
             self.state_2.put(4)
             self.logI("\t<  - - - !! ERROR: Central movement : inserting lock 2 - - -  >\t")
             self.gotoState("idle_error")  
@@ -967,14 +973,14 @@ class IRIS_FSM(fsmBase):
 # Homing Charge_Slider, m1 - - - - - - - - - - - - - - - - - - - - -
     def Charge_Central_state5_entry(self):       
         self.m1_home.put(1)                                                          # Preparazione per il vuoto: Homing Charge_Slider
-        self.tmrSet('moveTimeout18', 30)                                             # Set a timer of 30s
+        self.tmrSet('moveTimeout18', 30)                                             
         self.logI("\tStarting Central movement\t")     
 
     def Charge_Central_state5_eval(self):
         if self.m1_done_moving.rising():          
             self.gotoState("last_charge_state")   
 
-        elif self.tmrExpiring("moveTimeout18"):                                      # Timer expired event
+        elif self.tmrExpiring("moveTimeout18"):                                     
             self.state_2.put(4)
             self.logI("\t<  - - - !! ERROR: Charge Slider movement - - -  >\n")
             self.gotoState("idle_error")  
@@ -992,7 +998,7 @@ class IRIS_FSM(fsmBase):
             self.logI("\t >  - - - Iris is ready for the vacuum - - - <\n")
             self.gotoState("idle_state")   
 
-        elif self.tmrExpiring("moveTimeout18_1"):                                      # Timer expired event
+        elif self.tmrExpiring("moveTimeout18_1"):                                      
             self.state_2.put(4)
             self.gotoState("idle_error")  
 
@@ -1013,14 +1019,14 @@ class IRIS_FSM(fsmBase):
     def Irradiation_state_entry(self):
         self.state_4.put(1)
         self.decoupling.put(0)                                                 
-        self.tmrSet('moveTimeout19_1', 10)                                              # Set a timer of 10s
+        self.tmrSet('moveTimeout19_1', 10)                                            # Set a timer of 10s
 
     def Irradiation_state_eval(self):
         if self.state_4.putCompleting():    
             if self.decoupling.putCompleting():       
                self.gotoState("Irradiation_state1")                                   
 
-        elif self.tmrExpiring("moveTimeout19_1"):                                       # Timer expired event
+        elif self.tmrExpiring("moveTimeout19_1"):                                     # Timer expired event
             self.state_4.put(4)
             self.logI("\t<  - - - !! ERROR: Coupling_Motor movement - - -  >\n")
             self.gotoState("idle_error")  
@@ -1330,16 +1336,16 @@ class IRIS_FSM(fsmBase):
 
 # Movimentazione motore
     def Discharge_Central_state1_entry(self):
-        self.logI("\t> - - - Discharging Central Movement - - - < ")
-        self.m5_relative.put(self.i2*self.discharge_d1)                               # 1^ Movimentazione: Scarica primo Target
-        self.tmrSet('moveTimeout26_3', 30)                                              # Set a timer of 30s
+        self.logI("\t> - - - Discharging Central Movement - - - < ")                               
+        self.m5_absolute.put(self.exact_1_discharge_central_steps + self.relative_correction)                                           # 1^ Movimentazione: Scarica primo Target
+        self.tmrSet('moveTimeout26_3', 30)                                             
         self.logI("\tStarting Central movement")   
 
     def Discharge_Central_state1_eval(self):
         if self.m5_done_moving.rising():      
             self.gotoState("Discharge_Central_correction1") 
 
-        elif self.tmrExpiring("moveTimeout26_3"):                                       # Timer expired event
+        elif self.tmrExpiring("moveTimeout26_3"):                                       
             self.state_6.put(4)
             self.logI("\t<  - - - !! ERROR: Central movement : during 1^ movement - - -  >")
             self.gotoState("idle_error")  
@@ -1349,7 +1355,7 @@ class IRIS_FSM(fsmBase):
 
 # Correzzione passi
     def Discharge_Central_correction1_entry(self):
-        self.m5_relative.put(self.corr_i2*self.corr2)                                # Correzione posizione per insert solenaoid bottom                      
+        self.m5_absolute.put(self.exact_1_discharge_central_steps - self.relative_correction)                                             # 1^ Correzione                     
         self.tmrSet('moveTimeout26', 40)                                              
         self.logI("\tStarting Central movement")   
 
@@ -1367,7 +1373,7 @@ class IRIS_FSM(fsmBase):
 
 # Insert solenoid bottom, lock1
     def solenoid_bottom_1_entry(self):   
-        self.lock1_insert.put(1)                                                      # "Disinserisce" Solenoid_Bottom (1)                                    
+        self.lock1_insert.put(1)                                                                                                           # "Disinserisce" Solenoid_Bottom (1)                                    
         self.tmrSet('moveTimeout27', 10)                                              
 
     def solenoid_bottom_1_eval(self):
@@ -1386,7 +1392,7 @@ class IRIS_FSM(fsmBase):
 
 # Estrazione attuatore "lock1"
     def Extract_lock1_2_entry(self):
-        self.lock1_extract.put(1)                                                     # Estrae Solenoid_Bottom (2)      
+        self.lock1_extract.put(1)                                                                                                           # Estrae Solenoid_Bottom (2)      
         self.tmrSet('moveTimeout28_2', 10)                                             
 
     def Extract_lock1_2_eval(self):
@@ -1402,8 +1408,8 @@ class IRIS_FSM(fsmBase):
 
 # Movementazione motore - scarica 2^ Target
     def Discharge_Central_state2_entry(self):       
-        self.m5_relative.put(self.i2*self.discharge_d2)                               # 2^ Movimentazione: Scarica secondo Target
-        self.tmrSet('moveTimeout28', 30)                                              # Set a timer of 30s
+        self.m5_absolute.put(self.exact_2_discharge_central_steps + self.relative_correction)                                                # 2^ Movimentazione: Scarica secondo Target
+        self.tmrSet('moveTimeout28', 30)                                              
         self.logI("\tStarting Central movement")   
 
     def Discharge_Central_state2_eval(self):
@@ -1411,7 +1417,7 @@ class IRIS_FSM(fsmBase):
             self.logI("\t  2^ - Target out \n")                             
             self.gotoState("Discharge_Central_correction2") 
  
-        elif self.tmrExpiring("moveTimeout28"):                                       # Timer expired event
+        elif self.tmrExpiring("moveTimeout28"):                                       
             self.state_6.put(4)
             self.logI("\n<  - - - !! ERROR: Central movement : during 2^ movement - - -  >")
             self.gotoState("idle_error")  
@@ -1421,7 +1427,7 @@ class IRIS_FSM(fsmBase):
 
 # Correzzione passi
     def Discharge_Central_correction2_entry(self):
-        self.m5_relative.put(self.corr_i2*self.corr2)                                # Correzione posizione per insert solenaoid bottom                      
+        self.m5_absolute.put(self.exact_2_discharge_central_steps - self.relative_correction)                                                  # Correzione posizione per insert solenaoid bottom                      
         self.tmrSet('moveTimeout28_1', 30)                                              
         self.logI("\tStarting Central movement")   
 
@@ -1439,7 +1445,7 @@ class IRIS_FSM(fsmBase):
 
 # Insert solenoid bottom, lock1
     def solenoid_bottom_2_entry(self):   
-        self.lock1_insert.put(1)                                                     # "Disinserisce" Solenoid_Bottom (2)                                    
+        self.lock1_insert.put(1)                                                                                                               # "Disinserisce" Solenoid_Bottom (2)                                    
         self.tmrSet('moveTimeout28_4', 10)                                              
 
     def solenoid_bottom_2_eval(self):
@@ -1458,7 +1464,7 @@ class IRIS_FSM(fsmBase):
 
 # Estrazione attuatore "lock1"
     def Extract_lock1_3_entry(self):
-        self.lock1_extract.put(1)                                                     # Estrae Solenoid_Bottom (3)      
+        self.lock1_extract.put(1)                                                                                                             # Estrae Solenoid_Bottom (3)      
         self.tmrSet('moveTimeout29_1', 10)                                             
 
     def Extract_lock1_3_eval(self):
@@ -1474,7 +1480,7 @@ class IRIS_FSM(fsmBase):
 
 # Movimentazione motore 
     def Discharge_Central_state3_entry(self):      
-        self.m5_relative.put(self.i2*self.discharge_d3)                              # 3^ Movimentazione: Scarica terzo Target
+        self.m5_absolute.put(self.exact_3_discharge_central_steps + self.relative_correction)                                                  # 3^ Movimentazione: Scarica terzo Target
         self.tmrSet('moveTimeout30', 30)                                              
         self.logI("\tStarting Central movement")   
 
@@ -1493,7 +1499,7 @@ class IRIS_FSM(fsmBase):
 
 # Correzzione passi
     def Discharge_Central_correction3_entry(self):
-        self.m5_relative.put(self.corr_i2*self.corr2)                                 # Correzione posizione per insert solenaoid bottom                      
+        self.m5_absolute.put(self.exact_1_discharge_central_steps - self.relative_correction)                                                   # Correzione posizione per insert solenaoid bottom                      
         self.tmrSet('moveTimeout30_1', 30)                                              
         self.logI("\tStarting Central movement")   
 
@@ -1509,18 +1515,16 @@ class IRIS_FSM(fsmBase):
     def  Discharge_Central_correction3_exit(self):
          pass      
 
-# Correction Discharge movement 3, lock1
+# Insert lock1
     def solenoid_bottom_3_entry(self):       
-        self.lock1_insert.put(1)                                                        # "Disinserisce" Solenoid_Bottom (2)
-        self.tmrSet('moveTimeout31', 30)                                                # Set a timer of 30s
+        self.lock1_insert.put(1)                                                                                                                 # "Disinserisce" Solenoid_Bottom (2)
+        self.tmrSet('moveTimeout31', 30)                                              
 
     def solenoid_bottom_3_eval(self):
         if self.lock1_insert.putCompleting():                  
-            self.s6 = 1                                                                 # Sesto stato completato
-            self.state_6.put(2)
             self.gotoState("final_discharge_state")    
  
-        elif self.tmrExpiring("moveTimeout31"):                                         # Timer expired event
+        elif self.tmrExpiring("moveTimeout31"):                                         
             self.state_6.put(4)
             self.logI("\t<  - - - !! ERROR: Central movement : during 2^ movement - - -  >")
             self.gotoState("idle_error")  
@@ -1530,7 +1534,7 @@ class IRIS_FSM(fsmBase):
 
 # Stato finale - segnalazione interfaccia
     def final_discharge_state_entry(self):       
-        self.state_6.put(2)                                                             # "Disinserisce" Solenoid_Bottom (2)
+        self.state_6.put(2)                                                             
         self.tmrSet('moveTimeout31_1', 10)                                              
 
     def final_discharge_state_eval(self):
@@ -1542,7 +1546,7 @@ class IRIS_FSM(fsmBase):
             self.gotoState("idle_error")  
 
     def  final_discharge_state_exit(self):
-         self.s6 = 1                                                                      # Sesto stato completato
+         self.s6 = 1                                                                                                                               # Sesto stato completato
 
 ################################################################################
 #                           Discharge_Buffer_State                                      
@@ -1628,4 +1632,4 @@ class IRIS_FSM(fsmBase):
         else:                      # se dispari
            self.bufferpos.put(0)
         
-# committed
+# committed2

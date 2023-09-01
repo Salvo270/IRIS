@@ -20,8 +20,8 @@ class IRIS_FSM(fsmBase):
 
         # Discharge Central Movement position
         self.exact_1_discharge_central_steps = 4096
-        self.exact_2_discharge_central_steps = 13248 # -64
-        self.exact_3_discharge_central_steps = 21696-128 # 21952
+        self.exact_2_discharge_central_steps = 13248-64
+        self.exact_3_discharge_central_steps = 21568 # 21568
 
         # Charge Central Movement Correction
         self.relative_correction = 64  # correzione di uno step
@@ -270,7 +270,7 @@ class IRIS_FSM(fsmBase):
 
     def motor_settings_state_m3_1_entry(self):
 # M3
-        self.m3_speed.put(0.2) 
+        self.m3_speed.put(0.1) 
         self.tmrSet('moveTimeout03_2', 5)
 
     def motor_settings_state_m3_1_eval(self):
@@ -330,7 +330,7 @@ class IRIS_FSM(fsmBase):
 
     def motor_settings_state_m6_entry(self):
 # M6
-        self.m6_min_velocity.put(320)   
+        self.m6_min_velocity.put(128)   
         self.tmrSet('moveTimeout06_1', 5)
 
     def motor_settings_state_m6_eval(self):
@@ -342,7 +342,7 @@ class IRIS_FSM(fsmBase):
 
     def motor_settings_state_m6_1_entry(self):
 # M6
-        self.m6_speed.put(0.1) 
+        self.m6_speed.put(0.640) 
         self.tmrSet('moveTimeout06_2', 5)
 
     def motor_settings_state_m6_1_eval(self):
@@ -1954,4 +1954,4 @@ class IRIS_FSM(fsmBase):
         else:                      # se dispari
            self.bufferpos.put(0)
         
-# committed2
+# committed 1-09

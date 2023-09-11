@@ -8,8 +8,8 @@ class IRIS_FSM(fsmBase):
 
         
         # ALIGNMENT - - - - - - - - - - - - - - - - - - - - - - - -
-        # Charge_Slider position
-        self.exact_charge_slider_steps = 6592
+        # Charge_Slider positions
+        self.exact_charge_slider_steps = 6592+64
         self.exact_discharge_slider_steps = -6336+64
         self.exact_longitudinal_axis_steps = 128
 
@@ -959,7 +959,7 @@ class IRIS_FSM(fsmBase):
 
     def Charge_Central1_state_eval(self):
         if self.lock2_extract.putCompleting():
-            self.gotoState("Charge_Central_state1")   
+            self.gotoState("Charge_state")   
 
         elif self.tmrExpiring('moveTimeout8_1'):                                                                       
             self.state_2.put(4)
@@ -968,23 +968,7 @@ class IRIS_FSM(fsmBase):
     def  Charge_Central1_state_exit(self):
          pass  
 
-# Movimentazione motore
-    def Charge_Central_state1_entry(self):  
-        self.m5_absolute.put(self.exact_1_charge_central_steps + self.relative_correction)                                 # 1^ Movimentazione: Carica primo e secondo Target
-        self.tmrSet('moveTimeout8', 30)                                               
-        self.logI("\tStarting Central movement - 1^\t")     
 
-    def Charge_Central_state1_eval(self):
-        if self.m5_absolute.putCompleting():          
-            self.gotoState("Charge_state")   
-
-        elif self.tmrExpiring('moveTimeout8'):                                        
-            self.state_2.put(4)
-            self.logI("\t<  - - - !! ERROR: Central movement : during 1^ movement - - -  >\n")
-            self.gotoState("idle_error")  
-
-    def  Charge_Central_state1_exit(self):
-         pass   
 
 # Carica 1^, 2^ Target e Scarica 1^ Target: Charge Buffer, m2 - - - - - - - - - - - - - - - - - - - - -
     def Charge_state_entry(self): 
@@ -999,7 +983,7 @@ class IRIS_FSM(fsmBase):
     def Charge_state_eval(self):
         if self.m2_done_moving.rising():            
             self.logI("1^ Target in \t")
-            self.gotoState("Correction_CM")
+            self.gotoState("Charge_Central_state1")
 
         elif self.tmrExpiring("moveTimeout10"):                                       
             self.state_2.put(4) 
@@ -1008,6 +992,24 @@ class IRIS_FSM(fsmBase):
 
     def  Charge_state_exit(self):
          pass  
+
+# Movimentazione motore
+    def Charge_Central_state1_entry(self):  
+        self.m5_absolute.put(self.exact_1_charge_central_steps + self.relative_correction)                                 # 1^ Movimentazione: Carica primo e secondo Target
+        self.tmrSet('moveTimeout8', 30)                                               
+        self.logI("\tStarting Central movement - 1^\t")     
+
+    def Charge_Central_state1_eval(self):
+        if self.m5_absolute.putCompleting():          
+            self.gotoState("Correction_CM")   
+
+        elif self.tmrExpiring('moveTimeout8'):                                        
+            self.state_2.put(4)
+            self.logI("\t<  - - - !! ERROR: Central movement : during 1^ movement - - -  >\n")
+            self.gotoState("idle_error")  
+
+    def  Charge_Central_state1_exit(self):
+         pass   
 
 # Correzione Central Movement
     def Correction_CM_entry(self):     
@@ -1054,7 +1056,7 @@ class IRIS_FSM(fsmBase):
 
     def Extract_lock_state2_eval(self):
         if self.lock2_extract.putCompleting():
-            self.gotoState("Charge_Central_state2")   
+            self.gotoState("Charge_Buffer2_state")   
 
         elif self.tmrExpiring('moveTimeout11_1'):                                       
             self.state_2.put(4)
@@ -1063,23 +1065,6 @@ class IRIS_FSM(fsmBase):
     def  Extract_lock_state2_exit(self):
          pass  
     
-# Movimentazione motore Central Movement
-    def Charge_Central_state2_entry(self):
-        self.m5_absolute.put(self.exact_2_charge_central_steps + self.relative_correction)                                # 2^ Movimentazione: Carica secondo Target
-        self.tmrSet('moveTimeout11', 30)                                                
-        self.logI("\tStarting Central movement - 3^\t")     
-
-    def Charge_Central_state2_eval(self):
-        if self.m5_absolute.putCompleting():    
-            self.gotoState("Charge_Buffer2_state")   
-
-        elif self.tmrExpiring("moveTimeout11"):                                         
-            self.state_2.put(4)
-            self.logI("\t<  - - - !! ERROR: Central movement : during 2^ movement - - -  >")
-            self.gotoState("idle_error")  
-
-    def  Charge_Central_state2_exit(self):
-         pass  
 
 
 # Scarica 2^ Target, Carica 3^ Target: Charge Buffer, m2  - - - - - - - - - - - - - - - - - - - - - - 
@@ -1095,7 +1080,7 @@ class IRIS_FSM(fsmBase):
     def Charge_Buffer2_state_eval(self):
         if self.m2_done_moving.rising():                  
             self.logI("\t2^ - Target in\t")
-            self.gotoState("Correction_CM2") 
+            self.gotoState("Charge_Central_state2") 
 
         elif self.tmrExpiring("moveTimeout13"):                                       
             self.state_2.put(4) 
@@ -1105,6 +1090,23 @@ class IRIS_FSM(fsmBase):
     def  Charge_Buffer2_state_exit(self):
          pass
 
+# Movimentazione motore Central Movement
+    def Charge_Central_state2_entry(self):
+        self.m5_absolute.put(self.exact_2_charge_central_steps + self.relative_correction)                                # 2^ Movimentazione: Carica secondo Target
+        self.tmrSet('moveTimeout11', 30)                                                
+        self.logI("\tStarting Central movement - 3^\t")     
+
+    def Charge_Central_state2_eval(self):
+        if self.m5_absolute.putCompleting():    
+            self.gotoState("Correction_CM2")   
+
+        elif self.tmrExpiring("moveTimeout11"):                                         
+            self.state_2.put(4)
+            self.logI("\t<  - - - !! ERROR: Central movement : during 2^ movement - - -  >")
+            self.gotoState("idle_error")  
+
+    def  Charge_Central_state2_exit(self):
+         pass  
 # Correzione Central Movement
     def Correction_CM2_entry(self):     
         self.m5_absolute.put(self.exact_2_charge_central_steps - self.relative_correction)                                 # 2^ Correzione
@@ -1149,7 +1151,7 @@ class IRIS_FSM(fsmBase):
 
     def Extract_lock_state3_eval(self):
         if self.lock2_extract.putCompleting():
-            self.gotoState("Charge_Central_state3")   
+            self.gotoState("Charge_Buffer3_state")   
 
         elif self.tmrExpiring('moveTimeout13_2'):                                      
             self.state_2.put(4)
@@ -1158,24 +1160,6 @@ class IRIS_FSM(fsmBase):
     def  Extract_lock_state3_exit(self):
          pass  
     
-# Movimentazione Central Movement  
-    def Charge_Central_state3_entry(self):
-        self.m5_absolute.put(self.exact_3_charge_central_steps + self.relative_correction)                                # 3^ Movimentazione: Carica terzo Target
-        self.tmrSet('moveTimeout14', 30)                                              
-        self.logI("\tStarting Central movement - 3^\t")     
-
-    def Charge_Central_state3_eval(self):
-        if self.m5_absolute.putCompleting():          
-            self.logI("\t3^ - Target in\t")
-            self.gotoState("Charge_Buffer3_state")                                  
-
-        elif self.tmrExpiring("moveTimeout14"):                                      
-            self.state_2.put(4)
-            self.logI("\t<  - - - !! ERROR: Central movement : during 3^ movement - - -  >\n")
-            self.gotoState("idle_error")  
-
-    def  Charge_Central_state3_exit(self):
-         pass 
 
 # Scarica 3^ e ultimo Target: Charge Buffer, m2 - - - - - - - - - - - - - - - - - - - - - - 
     def Charge_Buffer3_state_entry(self):     
@@ -1190,7 +1174,7 @@ class IRIS_FSM(fsmBase):
     def Charge_Buffer3_state_eval(self):
         if self.m2_done_moving.rising():            
             self.logI("\t> - Charge_Buffer Discharged - <\t")
-            self.gotoState("Correction_CM3") 
+            self.gotoState("Charge_Central_state3") 
 
         elif self.tmrExpiring("moveTimeout16"):                                   
             self.state_2.put(4) 
@@ -1200,6 +1184,24 @@ class IRIS_FSM(fsmBase):
     def  Charge_Buffer3_state_exit(self):
            pass
 
+# Movimentazione Central Movement  
+    def Charge_Central_state3_entry(self):
+        self.m5_absolute.put(self.exact_3_charge_central_steps + self.relative_correction)                                # 3^ Movimentazione: Carica terzo Target
+        self.tmrSet('moveTimeout14', 30)                                              
+        self.logI("\tStarting Central movement - 3^\t")     
+
+    def Charge_Central_state3_eval(self):
+        if self.m5_absolute.putCompleting():          
+            self.logI("\t3^ - Target in\t")
+            self.gotoState("Correction_CM3")                                  
+
+        elif self.tmrExpiring("moveTimeout14"):                                      
+            self.state_2.put(4)
+            self.logI("\t<  - - - !! ERROR: Central movement : during 3^ movement - - -  >\n")
+            self.gotoState("idle_error")  
+
+    def  Charge_Central_state3_exit(self):
+         pass 
 # Correzione Central Movement
     def Correction_CM3_entry(self):     
         self.m5_absolute.put(self.exact_3_charge_central_steps - 1028)                                 # 3^ Correzione                     
@@ -1274,7 +1276,7 @@ class IRIS_FSM(fsmBase):
 
 # "Homing" Charge_Slider, m1 - - - - - - - - - - - - - - - - - - - - -
     def Charge_Central_state5_entry(self):       
-        self.m1_absolute.put(0)                                                          # Preparazione per il vuoto: Homing Charge_Slider
+        self.m1_absolute.put(64)                                                          # Preparazione per il vuoto: Homing Charge_Slider
         self.tmrSet('moveTimeout18', 30)                                             
         self.logI("\tStarting Central movement")     
 
